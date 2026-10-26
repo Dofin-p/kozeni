@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>KOZENI</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="KOZENI">
+<meta name="theme-color" content="#f7f6f2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1a1a19" media="(prefers-color-scheme: dark)">
+<style>
+  :root { --bg: #f7f6f2; --card: #ffffff; --text: #1a1a19; --sub: #6b6a65; --line: #e1e0d9; --accent: #2a78d6; --ok: #0a7d0a; --ng: #c62f2f; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #1a1a19; --card: #242422; --text: #f0efec; --sub: #a9a79f; --line: #383835; --accent: #3987e5; --ok: #4cc04c; --ng: #ef6b6b; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: calc(env(safe-area-inset-top) + 16px) 16px 32px; background: var(--bg); color: var(--text);
+         font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif; }
+  main { max-width: 480px; margin: 0 auto; }
+  h1 { font-size: 20px; font-weight: 600; margin: 0 0 4px; }
+  .sub { color: var(--sub); font-size: 13px; }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-top: 16px; }
+  h2 { font-size: 15px; font-weight: 600; margin: 0 0 12px; }
+  label { display: block; font-size: 13px; color: var(--sub); margin: 10px 0 4px; }
+  input { width: 100%; font: inherit; font-size: 16px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); }
+  button { font: inherit; padding: 12px 16px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text); margin-top: 12px; width: 100%; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .row { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+  .row:last-child { border-bottom: 0; }
+  .ok { color: var(--ok); } .ng { color: var(--ng); }
+  pre { white-space: pre-wrap; word-break: break-all; font-size: 12px; background: var(--bg); padding: 10px; border-radius: 8px; margin: 12px 0 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>KOZENI</h1>
+  <div class="sub">Phase 1：スマホからスプシまで1件通す</div>
+
+  <section>
+    <h2>いまの状態</h2>
+    <div class="row"><span>起動のしかた</span><span id="mode"></span></div>
+    <div class="row"><span>窓口の設定</span><span id="configured"></span></div>
+  </section>
+
+  <section>
+    <h2>テスト送信</h2>
+    <div class="sub">1円・カテゴリ「その他」を1件送ります。スプシの expenses に1行入れば成功です。</div>
+    <button class="primary" id="send">1件送る</button>
+    <div id="result"></div>
+  </section>
+
+  <section>
+    <h2>設定</h2>
+    <div class="sub">この端末にだけ保存されます。</div>
+    <label for="url">GAS ウェブアプリの URL</label>
+    <input id="url" type="url" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://script.google.com/macros/s/…/exec">
+    <label for="token">合言葉</label>
+    <input id="token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false">
+    <button id="save">保存</button>
+  </section>
+</main>
+
+<script>
+const KEY = 'kozeni.config';
+
+function loadConfig() {
+  try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; }
+}
+
+function saveConfig(cfg) {
+  try { localStorage.setItem(KEY, JSON.stringify(cfg)); return true; } catch { return false; }
+}
+
+function isStandalone() {
+  return navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
+}
+
+function render() {
+  const cfg = loadConfig();
+  document.getElementById('mode').textContent = isStandalone() ? 'ホーム画面から' : 'ブラウザのタブ';
+  const configured = document.getElementById('configured');
+  configured.textContent = cfg.url && cfg.token ? '済み' : 'まだ';
+  configured.className = cfg.url && cfg.token ? 'ok' : 'ng';
+  document.getElementById('url').value = cfg.url || '';
+  document.getElementById('token').value = cfg.token || '';
+}
+
+async function send() {
+  const cfg = loadConfig();
+  const out = document.getElementById('result');
+  if (!cfg.url || !cfg.token) {
+    out.innerHTML = '<pre class="ng">先に下の「設定」で URL と合言葉を保存してください。</pre>';
+    return;
+  }
+  const body = {
+    action: 'add',
+    token: cfg.token,
+    data: { id: crypto.randomUUID(), date: new Date().toISOString(), amount: 1, category: 'その他' },
+  };
+  out.innerHTML = '<pre>送信中…</pre>';
+  const started = performance.now();
+  try {
+    // text/plain にして CORS の事前確認を起こさない（GAS は OPTIONS に応答できない）
+    const res = await fetch(cfg.url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(body),
+    });
+    const ms = Math.round(performance.now() - started);
+    const json = await res.json();
+    const cls = json.ok ? 'ok' : 'ng';
+    const head = json.ok ? `成功（${ms} ms）` : `失敗（${ms} ms）`;
+    out.innerHTML = `<pre class="${cls}">${head}\n${escapeHtml(JSON.stringify(json, null, 2))}</pre>`;
+  } catch (err) {
+    const ms = Math.round(performance.now() - started);
+    out.innerHTML = `<pre class="ng">通信できませんでした（${ms} ms）\n${escapeHtml(String(err))}</pre>`;
+  }
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+document.getElementById('save').addEventListener('click', () => {
+  const url = document.getElementById('url').value.trim();
+  const token = document.getElementById('token').value.trim();
+  const saved = saveConfig({ url, token });
+  render();
+  document.getElementById('result').innerHTML = saved ? '' : '<pre class="ng">この端末に保存できませんでした。</pre>';
+});
+document.getElementById('send').addEventListener('click', send);
+render();
+</script>
+</body>
+</html>

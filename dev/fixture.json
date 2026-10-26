@@ -1,0 +1,28 @@
+{
+  "token": "dev-token",
+  "sheets": {
+    "expenses": [["id", "date", "amount", "category"]],
+    "categories": [
+      ["name", "order", "active"],
+      ["食費", 1, true],
+      ["日用品", 2, true],
+      ["ゲーム", 3, true],
+      ["本", 4, true],
+      ["交通費", 5, true],
+      ["現金引き落とし", 6, true],
+      ["その他", 7, true]
+    ],
+    "fixed_costs": [
+      ["name", "amount", "active"],
+      ["クロード", 3550, true],
+      ["paiday", 6525, true],
+      ["music", 680, true],
+      ["goodnotes", 120, true],
+      ["amazonprime", 600, true],
+      ["GPT", 3000, true],
+      ["Gemini", 750, true]
+    ],
+    "incomes": [["month", "name", "amount"]],
+    "summary": [["初期繰越", 100000]]
+  }
+}

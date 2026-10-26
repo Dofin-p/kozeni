@@ -1,9 +1,11 @@
 {
+  "id": "./",
   "name": "KOZENI",
   "short_name": "KOZENI",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#f7f6f2",
   "theme_color": "#f7f6f2",
   "icons": [

@@ -9,6 +9,14 @@ export function loadFixture() {
   return JSON.parse(readFileSync(new URL('dev/fixture.json', root), 'utf8'));
 }
 
+// Utilities.formatDate のうち、Code.gs が使う yyyy / MM / dd だけを真似る。
+function formatDate(date, timeZone, pattern) {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' })
+    .formatToParts(date);
+  const p = Object.fromEntries(parts.map((x) => [x.type, x.value]));
+  return pattern.replace('yyyy', p.year).replace('MM', p.month).replace('dd', p.day);
+}
+
 export function loadGas(fixture = loadFixture()) {
   const sheets = structuredClone(fixture.sheets);
   const props = { TOKEN: fixture.token };
@@ -19,6 +27,7 @@ export function loadGas(fixture = loadFixture()) {
     getRange: (row, col, numRows, numCols) => ({
       setValues: (vals) => {
         for (let i = 0; i < numRows; i++) {
+          sheets[name][row - 1 + i] ??= [];
           for (let j = 0; j < numCols; j++) sheets[name][row - 1 + i][col - 1 + j] = vals[i][j];
         }
       },
@@ -40,7 +49,7 @@ export function loadGas(fixture = loadFixture()) {
       MimeType: { JSON: 'application/json' },
       createTextOutput: (s) => ({ setMimeType() { return this; }, getContent: () => s }),
     },
-    Utilities: { getUuid: () => randomUUID() },
+    Utilities: { getUuid: () => randomUUID(), formatDate },
     Logger: { log: () => {} },
   };
   vm.createContext(ctx);

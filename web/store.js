@@ -2,7 +2,7 @@
 // localStorage が使えない（プライベートブラウズ等）ときはメモリだけで動く。
 export const HOLD_MS = 5000;
 
-const KEYS = { config: 'kozeni.config', state: 'kozeni.state', queue: 'kozeni.queue' };
+const KEYS = { config: 'kozeni.config', state: 'kozeni.state', queue: 'kozeni.queue', month: 'kozeni.month' };
 
 export function monthOf(date) {
   const d = new Date(date);
@@ -36,6 +36,9 @@ export function createStore({ storage, now = () => Date.now(), uuid = () => cryp
     setConfig: (config) => s.set(KEYS.config, config),
     cached: () => s.get(KEYS.state),
     setCached: (state) => s.set(KEYS.state, state),
+    // 最後に開いた「今月」の月データ。電波がなくても履歴とまとめをすぐ出すため。
+    cachedMonth: () => s.get(KEYS.month),
+    setCachedMonth: (data) => s.set(KEYS.month, data),
 
     queue: () => queue.slice(),
 

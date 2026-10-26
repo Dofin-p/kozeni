@@ -14,13 +14,13 @@
 <style>
   :root {
     --bg: #f7f6f2; --card: #ffffff; --key: #ffffff; --key-active: #e8e7e1; --op: #ecebe5;
-    --text: #1a1a19; --sub: #6b6a65; --muted: #9a988f; --line: #e1e0d9;
+    --text: #1a1a19; --sub: #6b6a65; --muted: #9a988f; --line: #e1e0d9; --bar-past: #d3d1c7;
     --accent: #2a78d6; --warn: #a86a00; --warn-bg: #fbf0d9; --ng: #c62f2f; --ng-bg: #fbe5e5; --ok: #2f7d32;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #1a1a19; --card: #242422; --key: #2c2c2a; --key-active: #3a3a37; --op: #34342f;
-      --text: #f0efec; --sub: #b4b2a9; --muted: #888780; --line: #383835;
+      --text: #f0efec; --sub: #b4b2a9; --muted: #888780; --line: #383835; --bar-past: #444441;
       --accent: #3987e5; --warn: #f0b84a; --warn-bg: #3a2f17; --ng: #ef6b6b; --ng-bg: #3d1f1f; --ok: #6cc070;
     }
   }
@@ -32,12 +32,16 @@
     font-variant-numeric: tabular-nums; -webkit-text-size-adjust: 100%; overscroll-behavior: none;
   }
   button { font: inherit; color: inherit; touch-action: manipulation; -webkit-tap-highlight-color: transparent; user-select: none; -webkit-user-select: none; cursor: pointer; }
+  button:disabled { cursor: default; }
   [hidden] { display: none !important; }
 
   #app {
     max-width: 440px; margin: 0 auto; height: 100dvh; display: flex; flex-direction: column;
-    padding: calc(env(safe-area-inset-top) + 12px) 12px calc(env(safe-area-inset-bottom) + 12px);
+    padding: calc(env(safe-area-inset-top) + 12px) 12px calc(env(safe-area-inset-bottom) + 4px);
   }
+  .view { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+
+  /* 入力 */
   .top { display: flex; justify-content: space-between; align-items: flex-start; padding: 0 4px; }
   .label { font-size: 13px; color: var(--sub); }
   .spent { font-size: 22px; font-weight: 600; }
@@ -47,7 +51,7 @@
   .sync.ng { color: var(--ng); background: var(--ng-bg); border-color: transparent; }
   .icon { width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); display: grid; place-items: center; padding: 0; }
 
-  .display { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-end; padding: 8px 8px 12px; min-height: 96px; }
+  .display { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-end; padding: 8px 8px 12px; min-height: 88px; }
   .expr { font-size: 15px; color: var(--sub); min-height: 22px; }
   .expr.ng { color: var(--ng); }
   .amount { font-size: 48px; font-weight: 600; line-height: 1.1; letter-spacing: -0.5px; }
@@ -62,25 +66,78 @@
     font-size: 13px; line-height: 1.25; padding: 6px 4px; text-align: center; word-break: break-all;
   }
   .cat:active { background: var(--key-active); }
-  .cat .dot { width: 8px; height: 8px; border-radius: 2px; }
+  .dot { width: 8px; height: 8px; border-radius: 2px; flex: none; display: inline-block; }
   .cats-empty { grid-column: 1 / -1; font-size: 14px; color: var(--sub); text-align: center; padding: 14px; border: 1px dashed var(--line); border-radius: 12px; background: none; }
 
-  .pad { display: grid; grid-template-columns: repeat(4, 1fr); grid-auto-rows: 62px; gap: 8px; }
+  .pad { display: grid; grid-template-columns: repeat(4, 1fr); grid-auto-rows: 58px; gap: 8px; }
   .key { border: 0; border-radius: 14px; background: var(--key); font-size: 24px; }
   .key:active { background: var(--key-active); }
   .key.op { background: var(--op); font-size: 20px; }
   .key.zero { grid-column: span 2; }
   .key.plus { grid-row: span 2; }
 
+  /* タブ */
+  .tabs { display: grid; grid-template-columns: repeat(3, 1fr); margin-top: 8px; border-top: 1px solid var(--line); }
+  .tab { border: 0; background: none; padding: 6px 0 2px; display: flex; flex-direction: column; align-items: center; gap: 1px; font-size: 11px; color: var(--muted); }
+  .tab[aria-current="page"] { color: var(--accent); }
+
+  /* 履歴・まとめ */
+  .monthbar { display: flex; justify-content: space-between; align-items: center; padding: 0 2px 6px; }
+  .monthbar strong { font-size: 16px; font-weight: 600; }
+  .monthbar .icon:disabled { opacity: .35; }
+  .status { font-size: 12px; color: var(--sub); text-align: center; min-height: 18px; }
+  .status.ng { color: var(--ng); }
+  .status button { border: 0; background: none; color: var(--accent); text-decoration: underline; padding: 0 4px; font-size: 12px; }
+  .scroll { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 0 2px 16px; }
+  .empty { color: var(--sub); text-align: center; padding: 32px 0; font-size: 14px; }
+  .small { font-size: 12px; color: var(--sub); }
+  .grow { flex: 1; text-align: left; }
+  .section-label { font-size: 12px; color: var(--sub); margin: 18px 0 4px; }
+
+  .day-head { display: flex; justify-content: space-between; font-size: 12px; color: var(--sub); padding: 14px 4px 4px; }
+  .entry { width: 100%; display: flex; align-items: center; gap: 10px; padding: 11px 8px; border: 0; border-bottom: 1px solid var(--line); background: none; text-align: left; font-size: 15px; }
+  .entry:active:not(:disabled) { background: var(--key-active); }
+  .entry-name { flex: 1; display: flex; flex-direction: column; }
+  .entry-memo { font-size: 12px; color: var(--sub); }
+  .entry-right { display: flex; align-items: center; gap: 8px; }
+  .entry-amount { font-weight: 500; }
+  .badge { font-size: 11px; color: var(--warn); background: var(--warn-bg); padding: 1px 8px; border-radius: 999px; }
+
+  .hero { text-align: center; padding: 6px 0 4px; }
+  .hero .big { font-size: 44px; font-weight: 600; line-height: 1.15; }
+  .hero .big.muted { color: var(--muted); }
+  .hero .sub { font-size: 12px; color: var(--sub); margin-top: 2px; }
+  .donut { position: relative; width: 200px; height: 200px; margin: 14px auto 6px; }
+  .donut-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; }
+  .donut-center .mid { font-size: 22px; font-weight: 600; }
+  .legend-row, .fixed-head { width: 100%; display: flex; align-items: center; gap: 10px; padding: 9px 8px; border: 0; border-radius: 10px; background: none; font-size: 15px; }
+  .legend-row:active, .fixed-head:active { background: var(--key-active); }
+  .legend-row .pct { width: 52px; text-align: right; font-size: 12px; color: var(--sub); }
+  .fixed { border-top: 1px solid var(--line); margin-top: 6px; padding-top: 4px; }
+  .fixed-head { color: var(--sub); font-size: 14px; }
+  .fixed-row { display: flex; padding: 6px 8px 6px 18px; font-size: 13px; color: var(--sub); }
+
+  .back { border: 0; background: none; color: var(--sub); font-size: 14px; padding: 4px 0; }
+  .detail-title { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  .detail-title .name { font-size: 17px; font-weight: 600; }
+  .detail-amount { font-size: 30px; font-weight: 600; margin-top: 2px; }
+  .trend-caption { color: var(--text); margin-bottom: 6px; }
+  .bars { display: flex; align-items: flex-end; gap: 8px; height: 110px; border-bottom: 1px solid var(--line); }
+  .bar-col { flex: 1; height: 100%; display: flex; align-items: flex-end; justify-content: center; border: 0; background: none; padding: 0; }
+  .bar { width: 22px; min-height: 2px; border-radius: 4px 4px 0 0; }
+  .bar-labels { display: flex; gap: 8px; font-size: 11px; color: var(--sub); margin-top: 4px; }
+  .bar-labels span { flex: 1; text-align: center; }
+
+  /* トースト・シート */
   .toast {
     position: fixed; left: 50%; transform: translateX(-50%); top: calc(env(safe-area-inset-top) + 64px);
     width: min(416px, calc(100% - 24px)); background: var(--text); color: var(--bg); border-radius: 12px;
-    padding: 12px 14px; display: flex; align-items: center; gap: 12px; overflow: hidden; z-index: 10;
+    padding: 12px 14px; display: flex; align-items: center; gap: 12px; overflow: hidden; z-index: 30;
   }
   .toast .msg { flex: 1; font-size: 15px; }
   .toast button { border: 0; background: none; color: inherit; font-weight: 600; text-decoration: underline; padding: 4px; }
-  .toast .bar { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--accent); width: 100%; transform-origin: left; }
-  .toast .bar.run { animation: countdown linear forwards; }
+  .toast .countdown { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--accent); width: 100%; transform-origin: left; }
+  .toast .countdown.run { animation: countdown linear forwards; }
   @keyframes countdown { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 
   .sheet { position: fixed; inset: 0; background: var(--bg); z-index: 20; overflow-y: auto; }
@@ -90,56 +147,108 @@
   .sheet label { display: block; font-size: 13px; color: var(--sub); margin: 14px 0 4px; }
   .sheet input { width: 100%; font: inherit; font-size: 16px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--text); }
   .primary { width: 100%; margin-top: 16px; padding: 12px; border-radius: 12px; border: 0; background: var(--accent); color: #fff; font-weight: 600; }
+  .danger { width: 100%; margin-top: 10px; padding: 12px; border-radius: 12px; border: 1px solid var(--ng); background: none; color: var(--ng); font-weight: 600; }
+  .primary:disabled, .danger:disabled { opacity: .5; }
   .note { font-size: 13px; color: var(--sub); margin-top: 12px; }
   .note.ok { color: var(--ok); } .note.ng { color: var(--ng); }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); font-size: 14px; }
+  .chip[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
   .queue-list { margin-top: 8px; font-size: 14px; }
   .queue-list div { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--line); }
 </style>
 </head>
 <body>
 <main id="app">
-  <header class="top">
-    <div>
-      <div class="label" id="monthLabel">今月の支出</div>
-      <div class="spent" id="spent">¥0</div>
+  <div class="view" id="view-input">
+    <header class="top">
+      <div>
+        <div class="label" id="monthLabel">今月の支出</div>
+        <div class="spent" id="spent">¥0</div>
+      </div>
+      <div class="top-right">
+        <span class="sync" id="sync" role="status"></span>
+        <button class="icon" id="openSettings" aria-label="設定">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <section class="display" aria-live="polite">
+      <div class="expr" id="expr"></div>
+      <div class="amount zero" id="amount">¥0</div>
+    </section>
+
+    <section class="cats" id="cats" aria-label="カテゴリ（押すと記録）"></section>
+
+    <section class="pad" id="pad" aria-label="電卓">
+      <button class="key" data-key="7">7</button>
+      <button class="key" data-key="8">8</button>
+      <button class="key" data-key="9">9</button>
+      <button class="key op" data-key="back" aria-label="1文字消す">⌫</button>
+      <button class="key" data-key="4">4</button>
+      <button class="key" data-key="5">5</button>
+      <button class="key" data-key="6">6</button>
+      <button class="key op" data-key="clear" aria-label="全部消す">C</button>
+      <button class="key" data-key="1">1</button>
+      <button class="key" data-key="2">2</button>
+      <button class="key" data-key="3">3</button>
+      <button class="key op plus" data-key="+" aria-label="足す">+</button>
+      <button class="key zero" data-key="0">0</button>
+      <button class="key" data-key="00">00</button>
+    </section>
+  </div>
+
+  <div class="view" id="view-browse" hidden>
+    <div class="monthbar">
+      <button class="icon" id="prevMonth" aria-label="前の月">‹</button>
+      <strong id="browseMonth"></strong>
+      <button class="icon" id="nextMonth" aria-label="次の月">›</button>
     </div>
-    <div class="top-right">
-      <span class="sync" id="sync" role="status"></span>
-      <button class="icon" id="openSettings" aria-label="設定">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
-      </button>
-    </div>
-  </header>
+    <div class="status" id="browseStatus" role="status"></div>
+    <div class="scroll" id="history"></div>
+    <div class="scroll" id="summary"></div>
+  </div>
 
-  <section class="display" aria-live="polite">
-    <div class="expr" id="expr"></div>
-    <div class="amount zero" id="amount">¥0</div>
-  </section>
-
-  <section class="cats" id="cats" aria-label="カテゴリ（押すと記録）"></section>
-
-  <section class="pad" id="pad" aria-label="電卓">
-    <button class="key" data-key="7">7</button>
-    <button class="key" data-key="8">8</button>
-    <button class="key" data-key="9">9</button>
-    <button class="key op" data-key="back" aria-label="1文字消す">⌫</button>
-    <button class="key" data-key="4">4</button>
-    <button class="key" data-key="5">5</button>
-    <button class="key" data-key="6">6</button>
-    <button class="key op" data-key="clear" aria-label="全部消す">C</button>
-    <button class="key" data-key="1">1</button>
-    <button class="key" data-key="2">2</button>
-    <button class="key" data-key="3">3</button>
-    <button class="key op plus" data-key="+" aria-label="足す">+</button>
-    <button class="key zero" data-key="0">0</button>
-    <button class="key" data-key="00">00</button>
-  </section>
+  <nav class="tabs" aria-label="画面">
+    <button class="tab" data-view="input" aria-current="page">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8.5 12h.01M12 12h.01M15.5 12h.01M8.5 16h.01M12 16h.01M15.5 16h.01"/></svg>
+      入力
+    </button>
+    <button class="tab" data-view="history">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/></svg>
+      履歴
+    </button>
+    <button class="tab" data-view="summary">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9h-9z"/><path d="M15 3.5A9 9 0 0 1 20.5 9H15z"/></svg>
+      まとめ
+    </button>
+  </nav>
 </main>
 
 <div class="toast" id="toast" role="status" hidden>
   <span class="msg" id="toastMsg"></span>
   <button id="undo">取り消す</button>
-  <span class="bar" id="toastBar"></span>
+  <span class="countdown" id="toastBar"></span>
+</div>
+
+<div class="sheet" id="editSheet" hidden>
+  <div class="sheet-inner">
+    <div class="sheet-head">
+      <h2>記録を直す</h2>
+      <button class="icon" id="editClose" aria-label="閉じる">✕</button>
+    </div>
+    <label for="editAmount">金額（円）</label>
+    <input id="editAmount" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
+    <label>カテゴリ</label>
+    <div class="chips" id="editCats"></div>
+    <label for="editDate">日時</label>
+    <input id="editDate" type="datetime-local">
+    <div class="note" id="editMemo"></div>
+    <button class="primary" id="editSave">保存</button>
+    <button class="danger" id="editDelete">削除</button>
+    <div class="note" id="editNote" role="status"></div>
+  </div>
 </div>
 
 <div class="sheet" id="settings" hidden>

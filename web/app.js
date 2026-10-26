@@ -1,10 +1,10 @@
 import * as calc from './calc.js';
 import { createStore, HOLD_MS, monthOf } from './store.js';
 import { call, isRetryable } from './api.js';
+import { colorOf, withPending, addMonths, monthLabel } from './month.js';
+import { renderHistory, openEditor } from './history.js';
+import { renderSummary } from './summary.js';
 
-// 色はカテゴリの並び順で固定する（まとめ画面の円グラフと同じ割り当て）。「その他」だけ灰色。
-const COLORS = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6'];
-const OTHER_COLOR = '#888780';
 const RETRY_MAX_MS = 60000;
 
 const $ = (id) => document.getElementById(id);
@@ -20,6 +20,18 @@ let flushTimer = null;
 let toastTimer = null;
 let stateSeq = 0;
 
+// 履歴・まとめ画面の状態
+let view = 'input';
+let browseMonth = monthOf(Date.now());
+let selectedCategory = null;
+let loading = false;
+let loadError = null;
+const monthData = new Map();
+// 送り終えたが、まだ月データを取り直していない記録。取り直すまで画面に足しておく。
+const recentSent = new Map();
+const cachedMonth = store.cachedMonth();
+if (cachedMonth && cachedMonth.month) monthData.set(cachedMonth.month, cachedMonth);
+
 // ---------- 表示 ----------
 
 function render() {
@@ -30,6 +42,7 @@ function render() {
   renderSync();
   renderCategories();
   renderQueue();
+  if (view !== 'input') renderBrowse();
 }
 
 function renderDisplay() {
@@ -72,7 +85,7 @@ function renderCategories() {
     box.append(b);
     return;
   }
-  names.forEach((name, i) => {
+  names.forEach((name) => {
     const b = document.createElement('button');
     b.className = 'cat';
     b.setAttribute('aria-label', `${name}で記録`);
@@ -80,7 +93,7 @@ function renderCategories() {
     if ([...name].length >= 6) b.style.gridColumn = 'span 2';
     const dot = document.createElement('span');
     dot.className = 'dot';
-    dot.style.background = name === 'その他' ? OTHER_COLOR : COLORS[i % COLORS.length];
+    dot.style.background = colorOf(name, names);
     const label = document.createElement('span');
     label.textContent = name;
     b.append(dot, label);
@@ -184,7 +197,12 @@ async function flush() {
     const res = await call(cfg, 'addBatch', { entries });
     stateSeq++;
     store.setCached(res.state);
+    res.results.filter((r) => r.ok).forEach((r) => {
+      const sent = batch.find((e) => e.id === r.id);
+      if (sent) recentSent.set(sent.id, sent);
+    });
     store.remove(res.results.map((r) => r.id));
+    if (view !== 'input' && browseMonth === monthOf(Date.now())) loadMonth(browseMonth);
     const rejected = res.results.filter((r) => !r.ok);
     if (rejected.length) {
       const first = batch.find((e) => e.id === rejected[0].id);
@@ -224,6 +242,117 @@ async function refreshState() {
   } catch (err) {
     if (err && err.code) { error = err.code; render(); }
     throw err;
+  }
+}
+
+// ---------- 履歴・まとめ ----------
+
+function showView(next) {
+  view = next;
+  document.querySelectorAll('.tab').forEach((t) => {
+    if (t.dataset.view === next) t.setAttribute('aria-current', 'page');
+    else t.removeAttribute('aria-current');
+  });
+  $('view-input').hidden = next !== 'input';
+  $('view-browse').hidden = next === 'input';
+  selectedCategory = null;
+  if (next === 'input') return render();
+  renderBrowse();
+  loadMonth(browseMonth);
+}
+
+// 手元にある月データに、未送信と送ったばかりの記録を足したもの。まだ一度も取れていなければ null。
+function currentData() {
+  const data = monthData.get(browseMonth);
+  return data ? withPending(data, [...store.queue(), ...recentSent.values()]) : null;
+}
+
+function renderBrowse() {
+  $('browseMonth').textContent = monthLabel(browseMonth);
+  $('nextMonth').disabled = browseMonth >= monthOf(Date.now());
+
+  const status = $('browseStatus');
+  status.className = 'status';
+  status.textContent = loading ? '読み込み中…' : '';
+  if (!loading && loadError) {
+    status.className = 'status ng';
+    status.textContent = loadError === 'not_configured' ? '設定で GAS とつないでください' : `読み込めませんでした（${loadError}）`;
+    const retry = document.createElement('button');
+    retry.textContent = '再読み込み';
+    retry.addEventListener('click', () => loadMonth(browseMonth));
+    status.append(retry);
+  }
+
+  $('history').hidden = view !== 'history';
+  $('summary').hidden = view !== 'summary';
+  const target = view === 'history' ? $('history') : $('summary');
+  const data = currentData();
+  if (!data) { target.textContent = ''; return; }
+  if (view === 'history') {
+    renderHistory(target, data, { onEdit: edit });
+  } else {
+    renderSummary(target, data, {
+      selected: selectedCategory,
+      monthName: monthLabel(browseMonth),
+      onSelect: (name) => { selectedCategory = name; renderBrowse(); target.scrollTop = 0; },
+      onBack: () => { selectedCategory = null; renderBrowse(); },
+      onEdit: edit,
+    });
+  }
+}
+
+let loadSeq = 0;
+async function loadMonth(month) {
+  const cfg = store.config();
+  if (!cfg.url || !cfg.token) { loadError = 'not_configured'; renderBrowse(); return; }
+  const seq = ++loadSeq;
+  loading = true;
+  loadError = null;
+  if (view !== 'input') renderBrowse();
+  try {
+    const data = await call(cfg, 'month', { month });
+    monthData.set(month, data);
+    if (month === monthOf(Date.now())) store.setCachedMonth(data);
+    data.entries.forEach((e) => recentSent.delete(e.id));
+  } catch (err) {
+    if (seq === loadSeq) loadError = err && err.code ? err.code : 'network';
+  } finally {
+    if (seq === loadSeq) loading = false;
+    if (view !== 'input') renderBrowse();
+  }
+}
+
+function moveMonth(n) {
+  const next = addMonths(browseMonth, n);
+  if (next > monthOf(Date.now())) return;
+  browseMonth = next;
+  selectedCategory = null;
+  renderBrowse();
+  loadMonth(browseMonth);
+}
+
+function edit(entry) {
+  const data = currentData();
+  openEditor(entry, data ? data.categories : [], {
+    onSave: (e, patch) => mutate('update', { id: e.id, ...patch }, '保存しました'),
+    onDelete: (e) => mutate('delete', { id: e.id }, '削除しました'),
+  });
+}
+
+// 修正・削除はめったにしないので、端末に溜めずにその場で送る。失敗したら理由を返す。
+async function mutate(action, data, done) {
+  try {
+    const res = await call(store.config(), action, data);
+    stateSeq++;
+    store.setCached(res.state);
+    if (action === 'delete') recentSent.delete(data.id);
+    await loadMonth(browseMonth);
+    showToast(done);
+    render();
+    return null;
+  } catch (err) {
+    if (err && err.code) return describeError(err);
+    return '通信できませんでした。電波のあるところでもう一度試してください。';
   }
 }
 
@@ -281,8 +410,12 @@ $('closeSettings').addEventListener('click', () => { $('settings').hidden = true
 $('save').addEventListener('click', saveSettings);
 $('retry').addEventListener('click', () => { error = null; retryDelay = 0; flush(); });
 
+$('prevMonth').addEventListener('click', () => moveMonth(-1));
+$('nextMonth').addEventListener('click', () => moveMonth(1));
+document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => showView(t.dataset.view)));
+
 document.addEventListener('keydown', (e) => {
-  if (!$('settings').hidden || e.metaKey || e.ctrlKey) return;
+  if (view !== 'input' || !$('settings').hidden || !$('editSheet').hidden || e.metaKey || e.ctrlKey) return;
   if (/^\d$/.test(e.key) || e.key === '+') press(e.key);
   else if (e.key === 'Backspace') press('back');
   else if (e.key === 'Escape') press('clear');
@@ -294,6 +427,7 @@ const wake = () => {
   retryDelay = 0;
   flush();
   refreshState().catch(() => {});
+  if (view !== 'input') loadMonth(browseMonth);
 };
 window.addEventListener('online', wake);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') wake(); });

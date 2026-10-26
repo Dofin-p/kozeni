@@ -1,8 +1,8 @@
 // 画面のファイルは端末のキャッシュからすぐ返し、裏で取り直して次に開いたときに反映する。
 // GAS への POST や他のサイトへの通信には触らない。
-const CACHE = 'kozeni-v2';
+const CACHE = 'kozeni-v3';
 const ASSETS = [
-  './', './index.html', './app.js', './calc.js', './store.js', './api.js',
+  './', './index.html', './app.js', './calc.js', './store.js', './api.js', './month.js', './history.js', './summary.js',
   './manifest.webmanifest', './icon-180.png', './icon-192.png', './icon-512.png',
 ];
 

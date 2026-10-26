@@ -1,17 +1,19 @@
 // 手元確認用サーバ。web/ を配信し、/api で gas/Code.gs を模擬スプシの上で動かす。
 // node dev/server.mjs → http://localhost:8788（窓口 URL は http://localhost:8788/api、合言葉は fixture.json の token）
-// DELAY_MS=3000 で GAS の遅さを真似る。curl localhost:8788/api/_offline?on=1 で /api を通信断にする（on=0 で戻る）。
+// SEED=1 で半年分のサンプルを入れる。DELAY_MS=3000 で GAS の遅さを真似る。curl localhost:8788/api/_offline?on=1 で /api を通信断にする（on=0 で戻る）。
 import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadGas } from './gas-mock.mjs';
+import { seed } from './seed.mjs';
 
 const PORT = Number(process.env.PORT) || 8788;
 const webDir = fileURLToPath(new URL('../web/', import.meta.url));
 const types = { '.html': 'text/html; charset=utf-8', '.png': 'image/png', '.webmanifest': 'application/manifest+json', '.js': 'text/javascript' };
 const DELAY_MS = Number(process.env.DELAY_MS) || 0;
 const gas = loadGas();
+if (process.env.SEED) console.log('seeded:', seed(gas));
 let offline = false;
 
 // ページの読み込み直しで通信が途中で切れても、サーバごと落ちないようにする

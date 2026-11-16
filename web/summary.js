@@ -35,7 +35,7 @@ export function renderNotices(root, notices) {
   root.append(box);
 }
 
-function renderOverview(root, data, { onSelect, notices }) {
+function renderOverview(root, data, { onSelect, notices, onIncome }) {
   renderNotices(root, notices);
 
   const hero = el('section', 'hero');
@@ -84,16 +84,24 @@ function renderOverview(root, data, { onSelect, notices }) {
   fixedBox.append(head, list);
   if (fixed.length) root.append(fixedBox);
 
-  if (data.incomes && data.incomes.length) {
-    const inc = el('section', 'fixed');
-    inc.append(el('div', 'section-label', '収入'));
-    data.incomes.forEach((i) => {
-      const row = el('div', 'fixed-row');
-      row.append(el('span', 'grow', i.name), el('span', '', yen(i.amount)));
-      inc.append(row);
-    });
-    root.append(inc);
+  // 収入：押すと直せる。足すボタンはいつも出す（月の初めに入れるため）
+  const inc = el('section', 'fixed');
+  inc.append(el('div', 'section-label', `収入 ${yen(data.income)}`));
+  const incomes = data.incomes || [];
+  if (incomes.length === 0) inc.append(el('div', 'income-empty', 'この月の収入はまだありません'));
+  incomes.forEach((i) => {
+    const row = el('button', 'income-row');
+    row.append(el('span', 'grow', i.name), el('span', '', yen(i.amount)));
+    if (onIncome && i.id) row.addEventListener('click', () => onIncome(i));
+    else row.disabled = true;
+    inc.append(row);
+  });
+  if (onIncome) {
+    const add = el('button', 'income-add', '＋ 収入を足す');
+    add.addEventListener('click', () => onIncome(null));
+    inc.append(add);
   }
+  root.append(inc);
 }
 
 // ドーナツは線の破線（stroke-dasharray）で切れ目を作る。12時から時計回り。

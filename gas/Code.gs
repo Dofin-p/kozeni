@@ -9,6 +9,8 @@ const SUMMARY_MONTHS = 24;
 const SUMMARY_HEADER_ROW = 4;
 // 固定費のトリガーは1日0時台に動く。この時間を過ぎても入っていなければ「入っていない」と知らせる。
 const FIXED_GRACE_HOURS = 2;
+const MAX_INCOME_NAME = 20;
+const INCOME_SUGGESTIONS = 6;
 
 const ACTIONS = {
   add: add_,
@@ -17,6 +19,8 @@ const ACTIONS = {
   month: month_,
   update: update_,
   delete: delete_,
+  saveIncome: saveIncome_,
+  deleteIncome: deleteIncome_,
 };
 
 function doPost(e) {
@@ -124,6 +128,7 @@ function month_(d) {
   const month = d.month || nowMonth_();
   if (!/^\d{4}-\d{2}$/.test(month)) throw new Error('invalid_month');
 
+  ensureIncomeIds_();
   const settings = summarySettings_();
   const expenses = readExpenses_();
   const incomes = readIncomes_();
@@ -176,7 +181,8 @@ function month_(d) {
     startMonth: settings.startMonth,
     carryover: carryover,
     income: incomeOf[month] || 0,
-    incomes: incomes.filter((i) => i.month === month).map((i) => ({ name: i.name, amount: i.amount })),
+    incomes: incomes.filter((i) => i.month === month).map((i) => ({ id: i.id, name: i.name, amount: i.amount })),
+    incomeNames: incomeNames_(incomes),
     spent: spent,
     fixed: fixed,
     variable: spent - fixed,
@@ -247,6 +253,76 @@ function delete_(d) {
   const i = findRow_(values, col.id, d.id);
   if (i !== -1) sh.deleteRow(i + 1);
   return { id: d.id, deleted: i !== -1, state: state_() };
+}
+
+// ---------- 収入（まとめ画面から） ----------
+
+// まとめ画面からの収入の追加と修正。id は端末が作る（送り直しても行が増えない）。
+// 月の列は書式なしテキストにしてから書く（日付に変わると summary の数式が拾わない）。
+function saveIncome_(d) {
+  if (typeof d.id !== 'string' || d.id === '') throw new Error('invalid_id');
+  if (typeof d.month !== 'string' || !/^\d{4}-\d{2}$/.test(d.month)) throw new Error('invalid_month');
+  const name = typeof d.name === 'string' ? d.name.trim() : '';
+  if (name === '' || name.length > MAX_INCOME_NAME) throw new Error('invalid_name');
+  if (!Number.isInteger(d.amount) || d.amount <= 0 || d.amount >= 10000000) throw new Error('invalid_amount');
+
+  ensureIncomeIds_();
+  const sh = sheet_('incomes');
+  const values = sh.getDataRange().getValues();
+  const col = columns_(values[0], ['month', 'name', 'amount', 'id']);
+  const i = findRow_(values, col.id, d.id);
+  const rowIndex = i === -1 ? values.length : i;
+  const row = i === -1 ? new Array(values[0].length).fill('') : values[i].slice();
+  row[col.month] = d.month;
+  row[col.name] = name;
+  row[col.amount] = d.amount;
+  row[col.id] = d.id;
+  sh.getRange(rowIndex + 1, col.month + 1).setNumberFormat('@');
+  sh.getRange(rowIndex + 1, 1, 1, row.length).setValues([row]);
+  return { id: d.id, updated: i !== -1, state: state_() };
+}
+
+// もう無い id でもエラーにしない（二度押し・送り直し対策）。
+function deleteIncome_(d) {
+  if (typeof d.id !== 'string' || d.id === '') throw new Error('invalid_id');
+  ensureIncomeIds_();
+  const sh = sheet_('incomes');
+  const values = sh.getDataRange().getValues();
+  const i = findRow_(values, columns_(values[0], ['id']).id, d.id);
+  if (i !== -1) sh.deleteRow(i + 1);
+  return { id: d.id, deleted: i !== -1, state: state_() };
+}
+
+// incomes に id 列が無ければ見出しを足し、id の無い行（手で入れた行）に振る。
+// まとめ画面から直したり消したりするときの目印。何度呼んでもよい。
+function ensureIncomeIds_() {
+  const sh = sheet_('incomes');
+  const values = sh.getDataRange().getValues();
+  let idCol = values[0].indexOf('id');
+  if (idCol === -1) {
+    idCol = values[0].length;
+    sh.getRange(1, idCol + 1).setValues([['id']]);
+  }
+  for (let i = 1; i < values.length; i++) {
+    const r = values[i];
+    const empty = r.every((v, j) => j === idCol || v === '' || v == null);
+    if (!empty && (r[idCol] === undefined || r[idCol] === '')) {
+      sh.getRange(i + 1, idCol + 1).setValues([['inc:' + Utilities.getUuid()]]);
+    }
+  }
+}
+
+// 収入の名前の候補：新しい月に使った名前から順に、最後の金額つき。
+function incomeNames_(incomes) {
+  const sorted = incomes.slice().sort((a, b) => (a.month < b.month ? 1 : a.month > b.month ? -1 : 0));
+  const seen = {};
+  const out = [];
+  sorted.forEach((i) => {
+    if (seen[i.name] || out.length >= INCOME_SUGGESTIONS) return;
+    seen[i.name] = true;
+    out.push({ name: i.name, amount: i.amount });
+  });
+  return out;
 }
 
 // ---------- 書き込み ----------
@@ -340,9 +416,15 @@ function readExpenses_() {
 function readIncomes_() {
   const values = sheet_('incomes').getDataRange().getValues();
   const col = columns_(values[0], ['month', 'name', 'amount']);
+  const idCol = values[0].indexOf('id');
   return values
     .slice(1)
-    .map((r) => ({ month: monthText_(r[col.month]), name: String(r[col.name]), amount: Number(r[col.amount]) || 0 }))
+    .map((r) => ({
+      id: idCol === -1 ? '' : String(r[idCol]),
+      month: monthText_(r[col.month]),
+      name: String(r[col.name]),
+      amount: Number(r[col.amount]) || 0,
+    }))
     .filter((r) => r.month !== '' && r.amount !== 0);
 }
 

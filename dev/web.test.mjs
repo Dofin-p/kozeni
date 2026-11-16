@@ -93,3 +93,31 @@ test('localStorage が使えなくてもメモリで動く', () => {
   assert.equal(store.queue().length, 1);
   assert.deepEqual(store.config(), { url: 'u' });
 });
+
+// ---------- 収入の入力 ----------
+import { parseAmount, incomeFields } from '../web/income.js';
+
+test('収入の金額は「45,000」「４５０００円」も読む', () => {
+  assert.equal(parseAmount('45000'), 45000);
+  assert.equal(parseAmount('45,000'), 45000);
+  assert.equal(parseAmount('４５０００円'), 45000);
+  assert.ok(Number.isNaN(parseAmount('4.5万')));
+  assert.ok(Number.isNaN(parseAmount('')));
+});
+
+test('収入の入力は名前と金額を確かめる', () => {
+  assert.deepEqual(incomeFields(' バイト ', '53,131'), { name: 'バイト', amount: 53131 });
+  assert.match(incomeFields('', '1000').error, /名前/);
+  assert.match(incomeFields('あ'.repeat(21), '1000').error, /20文字/);
+  assert.match(incomeFields('バイト', '0').error, /金額/);
+  assert.match(incomeFields('バイト', '10000000').error, /金額/);
+});
+
+test('同じ月に同じ名前の収入があれば知らせる（自分自身は数えない）', async () => {
+  const { sameNameIn } = await import('../web/income.js');
+  const existing = [{ id: 'a', name: '仕送り', amount: 45000 }, { id: 'b', name: 'バイト', amount: 53131 }];
+  assert.equal(sameNameIn(existing, ' 仕送り ', null).id, 'a');
+  assert.equal(sameNameIn(existing, '仕送り', 'a'), null);
+  assert.equal(sameNameIn(existing, '臨時', null), null);
+  assert.equal(sameNameIn(undefined, '仕送り', null), null);
+});

@@ -126,6 +126,10 @@
   .fixed { border-top: 1px solid var(--line); margin-top: 6px; padding-top: 4px; }
   .fixed-head { color: var(--sub); font-size: 14px; }
   .fixed-row { display: flex; padding: 6px 8px 6px 18px; font-size: 13px; color: var(--sub); }
+  .income-row { width: 100%; display: flex; align-items: center; padding: 9px 8px; border: 0; border-radius: 10px; background: none; font-size: 15px; }
+  .income-row:active, .income-add:active { background: var(--key-active); }
+  .income-add { width: 100%; text-align: left; padding: 9px 8px; border: 0; border-radius: 10px; background: none; color: var(--accent); font-size: 14px; }
+  .income-empty { font-size: 13px; color: var(--sub); padding: 2px 8px; }
 
   .back { border: 0; background: none; color: var(--sub); font-size: 14px; padding: 4px 0; }
   .detail-title { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
@@ -160,7 +164,7 @@
   .danger { width: 100%; margin-top: 10px; padding: 12px; border-radius: 12px; border: 1px solid var(--ng); background: none; color: var(--ng); font-weight: 600; }
   .primary:disabled, .danger:disabled { opacity: .5; }
   .note { font-size: 13px; color: var(--sub); margin-top: 12px; }
-  .note.ok { color: var(--ok); } .note.ng { color: var(--ng); }
+  .note.ok { color: var(--ok); } .note.ng { color: var(--ng); } .note.warn { color: var(--warn); }
   .chips { display: flex; flex-wrap: wrap; gap: 8px; }
   .chip { display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); font-size: 14px; }
   .chip[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
@@ -258,6 +262,24 @@
     <button class="primary" id="editSave">保存</button>
     <button class="danger" id="editDelete">削除</button>
     <div class="note" id="editNote" role="status"></div>
+  </div>
+</div>
+
+<div class="sheet" id="incomeSheet" hidden>
+  <div class="sheet-inner">
+    <div class="sheet-head">
+      <h2 id="incomeTitle">収入を足す</h2>
+      <button class="icon" id="incomeClose" aria-label="閉じる">✕</button>
+    </div>
+    <label id="incomeNamesLabel">前に入れた名前</label>
+    <div class="chips" id="incomeNames"></div>
+    <label for="incomeName">名前</label>
+    <input id="incomeName" autocomplete="off" maxlength="20" placeholder="仕送り・バイトなど">
+    <label for="incomeAmount">金額（円）</label>
+    <input id="incomeAmount" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
+    <button class="primary" id="incomeSave">保存</button>
+    <button class="danger" id="incomeDelete">削除</button>
+    <div class="note" id="incomeNote" role="status"></div>
   </div>
 </div>
 

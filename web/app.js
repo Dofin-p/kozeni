@@ -4,6 +4,7 @@ import { call, isRetryable } from './api.js';
 import { colorOf, withPending, addMonths, monthLabel, notices } from './month.js';
 import { renderHistory, openEditor } from './history.js';
 import { renderSummary, renderNotices } from './summary.js';
+import { openIncomeEditor } from './income.js';
 
 const RETRY_MAX_MS = 60000;
 
@@ -320,6 +321,7 @@ function renderBrowse() {
       onSelect: (name) => { selectedCategory = name; renderBrowse(); target.scrollTop = 0; },
       onBack: () => { selectedCategory = null; renderBrowse(); },
       onEdit: edit,
+      onIncome: editIncome,
     });
   }
 }
@@ -360,6 +362,14 @@ function edit(entry) {
   openEditor(entry, data ? data.categories : [], {
     onSave: (e, patch) => mutate('update', { id: e.id, ...patch }, '保存しました'),
     onDelete: (e) => mutate('delete', { id: e.id }, '削除しました'),
+  });
+}
+
+function editIncome(income) {
+  const data = currentData();
+  openIncomeEditor({ income, month: browseMonth, suggestions: data ? data.incomeNames : [], existing: data ? data.incomes : [] }, {
+    onSave: (f) => mutate('saveIncome', { id: f.id || `inc:${crypto.randomUUID()}`, month: f.month, name: f.name, amount: f.amount }, income ? '収入を直しました' : '収入を足しました'),
+    onDelete: (i) => mutate('deleteIncome', { id: i.id }, '収入を消しました'),
   });
 }
 
@@ -439,7 +449,7 @@ $('nextMonth').addEventListener('click', () => moveMonth(1));
 document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => showView(t.dataset.view)));
 
 document.addEventListener('keydown', (e) => {
-  if (view !== 'input' || !$('settings').hidden || !$('editSheet').hidden || e.metaKey || e.ctrlKey) return;
+  if (view !== 'input' || !$('settings').hidden || !$('editSheet').hidden || !$('incomeSheet').hidden || e.metaKey || e.ctrlKey) return;
   if (/^\d$/.test(e.key) || e.key === '+') press(e.key);
   else if (e.key === 'Backspace') press('back');
   else if (e.key === 'Escape') press('clear');

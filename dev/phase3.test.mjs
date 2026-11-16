@@ -251,3 +251,89 @@ test('state と month は health を返す', () => {
   assert.ok(Array.isArray(state.health.fixedMissing));
   assert.deepEqual(gas.call('month', { month: shift(tokyoMonth(), -1) }).data.health, state.health, '過去の月を開いても「今」の手がかり');
 });
+
+// ---------- 収入（まとめ画面から） ----------
+
+function withIncomes() {
+  const gas = loadGas();
+  gas.sheets.summary = [['初期繰越', 100000], ['開始月', '2026-10']];
+  gas.sheets.incomes = [
+    ['month', 'name', 'amount'],
+    ['2026-10', '仕送り', 45000],
+    ['2026-10', 'バイト', 48000],
+    ['2026-11', '仕送り', 45000],
+    ['2026-11', 'バイト', 53131],
+  ];
+  return gas;
+}
+
+test('month を開くと incomes に id 列ができ、手で入れた行にも id が振られる（何度開いても変わらない）', () => {
+  const gas = withIncomes();
+  const nov = gas.call('month', { month: '2026-11' }).data;
+  assert.deepEqual(gas.sheets.incomes[0], ['month', 'name', 'amount', 'id']);
+  assert.ok(gas.sheets.incomes.slice(1).every((r) => /^inc:/.test(r[3])));
+  assert.deepEqual(plain(nov.incomes.map((i) => i.name)), ['仕送り', 'バイト']);
+  assert.ok(nov.incomes.every((i) => i.id.startsWith('inc:')));
+  const again = gas.call('month', { month: '2026-11' }).data;
+  assert.deepEqual(plain(again.incomes.map((i) => i.id)), plain(nov.incomes.map((i) => i.id)));
+  assert.equal(nov.income, 98131, '列が増えても合計は変わらない');
+});
+
+test('month は収入の名前の候補を、新しい月の金額つきで返す', () => {
+  const gas = withIncomes();
+  gas.sheets.incomes.push(['2026-09', '臨時', 3000]);
+  const dec = gas.call('month', { month: '2026-12' }).data;
+  assert.deepEqual(plain(dec.incomeNames), [
+    { name: '仕送り', amount: 45000 },
+    { name: 'バイト', amount: 53131 },
+    { name: '臨時', amount: 3000 },
+  ]);
+  assert.deepEqual(plain(dec.incomes), []);
+});
+
+test('saveIncome は月を書式なしテキストで足し、同じ id なら上書きする', () => {
+  const gas = withIncomes();
+  const r = gas.call('saveIncome', { id: 'inc:new', month: '2026-12', name: ' 仕送り ', amount: 45000 });
+  assert.equal(r.ok, true);
+  assert.equal(r.data.updated, false);
+  const row = gas.sheets.incomes.find((x) => x[3] === 'inc:new');
+  assert.deepEqual(row, ['2026-12', '仕送り', 45000, 'inc:new']);
+  const n = gas.sheets.incomes.indexOf(row) + 1;
+  assert.equal(gas.formats[`incomes!${n},1`], '@', '月のセルは書式なしテキスト');
+
+  const again = gas.call('saveIncome', { id: 'inc:new', month: '2026-12', name: '仕送り', amount: 50000 });
+  assert.equal(again.data.updated, true);
+  assert.equal(gas.sheets.incomes.filter((x) => x[3] === 'inc:new').length, 1, '送り直しても1行');
+  assert.equal(gas.call('month', { month: '2026-12' }).data.income, 50000);
+  assert.ok(again.data.state.categories.length > 0, '入力画面用の state も返す');
+});
+
+test('saveIncome は手で入れた行も id で直せる', () => {
+  const gas = withIncomes();
+  const baito = gas.call('month', { month: '2026-11' }).data.incomes.find((i) => i.name === 'バイト');
+  gas.call('saveIncome', { id: baito.id, month: '2026-11', name: 'バイト', amount: 60000 });
+  assert.equal(gas.call('month', { month: '2026-11' }).data.income, 105000);
+  assert.equal(gas.sheets.incomes.length, 5, '行は増えない');
+});
+
+test('saveIncome は不正な入力を断る', () => {
+  const gas = withIncomes();
+  const bad = (d) => gas.call('saveIncome', { id: 'inc:x', month: '2026-11', name: 'バイト', amount: 1000, ...d }).error;
+  assert.equal(bad({ id: '' }), 'invalid_id');
+  assert.equal(bad({ month: '2026/11' }), 'invalid_month');
+  assert.equal(bad({ name: '  ' }), 'invalid_name');
+  assert.equal(bad({ name: 'あ'.repeat(21) }), 'invalid_name');
+  assert.equal(bad({ amount: 0 }), 'invalid_amount');
+  assert.equal(bad({ amount: 1.5 }), 'invalid_amount');
+  assert.equal(gas.sheets.incomes.length, 5);
+});
+
+test('deleteIncome は行を消し、もう無い id でもエラーにしない', () => {
+  const gas = withIncomes();
+  const shiokuri = gas.call('month', { month: '2026-11' }).data.incomes.find((i) => i.name === '仕送り');
+  const r = gas.call('deleteIncome', { id: shiokuri.id });
+  assert.equal(r.data.deleted, true);
+  assert.equal(gas.call('month', { month: '2026-11' }).data.income, 53131);
+  assert.equal(gas.call('deleteIncome', { id: shiokuri.id }).data.deleted, false);
+  assert.equal(gas.call('month', { month: '2026-10' }).data.income, 93000, 'ほかの月は消えない');
+});

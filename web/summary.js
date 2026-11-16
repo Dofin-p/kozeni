@@ -22,7 +22,22 @@ export function renderSummary(root, data, ctx) {
   else renderOverview(root, data, ctx);
 }
 
-function renderOverview(root, data, { onSelect }) {
+// 記録が止まっていないかの注意。月データがまだ取れていないとき（電波なし）も、これだけは出す。
+export function renderNotices(root, notices) {
+  if (!notices || notices.length === 0) return;
+  const box = el('section', 'notices');
+  box.setAttribute('role', 'alert');
+  notices.forEach((n) => {
+    const row = el('div', `notice ${n.tone}`);
+    row.append(el('div', 'notice-text', n.text), el('div', 'notice-hint', n.hint));
+    box.append(row);
+  });
+  root.append(box);
+}
+
+function renderOverview(root, data, { onSelect, notices }) {
+  renderNotices(root, notices);
+
   const hero = el('section', 'hero');
   hero.append(el('div', 'label', 'この月の残り'));
   if (data.balance == null) {

@@ -106,3 +106,44 @@ export function fromLocalInput(value) {
   const d = new Date(value);
   return isNaN(d.getTime()) ? null : d.toISOString();
 }
+
+// ---------- 記録が止まっていないかの注意 ----------
+
+const DAY = 86400000;
+export const STALE_DAYS = 3;
+export const UNSENT_DAYS = 1;
+
+// health は GAS の state / month が返す手がかり。queue は端末の未送信キュー。
+// 強いものから順に { tone: 'ng' | 'warn', text, hint } を返す。何もなければ空配列。
+export function notices(health, queue, now) {
+  const out = [];
+  if (health && health.month === monthOf(now) && health.fixedMissing && health.fixedMissing.length) {
+    out.push({
+      tone: 'ng',
+      text: `今月の固定費が入っていません（${health.fixedMissing.join('・')}）`,
+      hint: 'Apps Script で addFixedCosts を実行すると入ります（二重にはなりません）',
+    });
+  }
+
+  const times = queue.map((e) => Date.parse(e.date));
+  if (times.length && now - Math.min(...times) >= UNSENT_DAYS * DAY) {
+    out.push({
+      tone: 'warn',
+      text: `${Math.floor((now - Math.min(...times)) / DAY)}日前の記録を含む ${queue.length}件がまだ送れていません`,
+      hint: '設定（右上の歯車）の「今すぐ送る」で送り直せます',
+    });
+  }
+
+  if (health) {
+    const recorded = health.lastRecordedAt ? [Date.parse(health.lastRecordedAt), ...times] : times;
+    const last = recorded.length ? Math.max(...recorded) : null;
+    if (last != null && now - last >= STALE_DAYS * DAY) {
+      out.push({
+        tone: 'warn',
+        text: `最後の記録から ${Math.floor((now - last) / DAY)}日たっています`,
+        hint: '記録を忘れていないか、スプシに届いているかを確かめてください',
+      });
+    }
+  }
+  return out;
+}

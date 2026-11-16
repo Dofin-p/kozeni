@@ -7,6 +7,8 @@ const FIXED_CATEGORY = '固定費';
 const TREND_MONTHS = 6;
 const SUMMARY_MONTHS = 24;
 const SUMMARY_HEADER_ROW = 4;
+// 固定費のトリガーは1日0時台に動く。この時間を過ぎても入っていなければ「入っていない」と知らせる。
+const FIXED_GRACE_HOURS = 2;
 
 const ACTIONS = {
   add: add_,
@@ -110,10 +112,11 @@ function addBatch_(d) {
 // 入力画面に要るものだけ返す：使えるカテゴリと、今月（東京時間）の支出合計（固定費を含む）。
 function state_() {
   const month = nowMonth_();
-  const spent = readExpenses_()
+  const expenses = readExpenses_();
+  const spent = expenses
     .filter((e) => e.month === month)
     .reduce((sum, e) => sum + e.amount, 0);
-  return { categories: activeCategories_(), month: month, spent: spent };
+  return { categories: activeCategories_(), month: month, spent: spent, health: health_(expenses, new Date()) };
 }
 
 // 履歴とまとめ画面用：指定した月の明細・集計と、残高の計算に要る数字。
@@ -184,7 +187,26 @@ function month_(d) {
       id: e.id, date: e.date.toISOString(), amount: e.amount, category: e.category, memo: e.memo,
     })),
     trend: trend,
+    health: health_(expenses, new Date(), settings),
   };
+}
+
+// 記録が止まっていないかの手がかり（いつ聞かれても「今」について返す）。
+// fixedMissing：今月（東京時間）入っているはずなのに無い固定費の名前。開始月より前と、1日の FIXED_GRACE_HOURS 時までは空。
+// lastRecordedAt：固定費を除いた、いちばん新しい記録の日時（月を問わない）。1件も無ければ null。
+function health_(expenses, now, settings) {
+  const month = Utilities.formatDate(now, TZ, 'yyyy-MM');
+  const start = (settings || summarySettings_()).startMonth;
+  const ids = {};
+  let last = null;
+  expenses.forEach((e) => {
+    ids[e.id] = true;
+    if (e.category !== FIXED_CATEGORY && (!last || e.date.getTime() > last.getTime())) last = e.date;
+  });
+  const sinceFirst = now.getTime() - new Date(month + '-01T00:00:00+09:00').getTime();
+  const due = start && month >= start && sinceFirst >= FIXED_GRACE_HOURS * 3600000;
+  const fixedMissing = due ? fixedEntriesFor_(month).filter((f) => !ids[f.id]).map((f) => f.memo) : [];
+  return { month: month, fixedMissing: fixedMissing, lastRecordedAt: last ? last.toISOString() : null };
 }
 
 // 履歴からの修正。送られてきた項目だけ変える。

@@ -1,9 +1,9 @@
 import * as calc from './calc.js';
 import { createStore, HOLD_MS, monthOf } from './store.js';
 import { call, isRetryable } from './api.js';
-import { colorOf, withPending, addMonths, monthLabel } from './month.js';
+import { colorOf, withPending, addMonths, monthLabel, notices } from './month.js';
 import { renderHistory, openEditor } from './history.js';
-import { renderSummary } from './summary.js';
+import { renderSummary, renderNotices } from './summary.js';
 
 const RETRY_MAX_MS = 60000;
 
@@ -42,7 +42,23 @@ function render() {
   renderSync();
   renderCategories();
   renderQueue();
+  renderAlertDot();
   if (view !== 'input') renderBrowse();
+}
+
+// 記録が止まっていないかの注意。手がかりは最後に受け取った state（月データを取ったときも上書きする）。
+function currentNotices() {
+  const cached = store.cached();
+  return notices(cached && cached.health, store.queue(), Date.now());
+}
+
+// 注意があれば、どの画面にいても「まとめ」のタブに印を付ける。
+function renderAlertDot() {
+  const list = currentNotices();
+  const tab = document.querySelector('.tab[data-view="summary"]');
+  tab.classList.toggle('alert', list.length > 0);
+  tab.classList.toggle('alert-ng', list.some((n) => n.tone === 'ng'));
+  tab.setAttribute('aria-label', list.length ? `まとめ（注意 ${list.length}件）` : 'まとめ');
 }
 
 function renderDisplay() {
@@ -285,14 +301,21 @@ function renderBrowse() {
 
   $('history').hidden = view !== 'history';
   $('summary').hidden = view !== 'summary';
+  renderAlertDot();
   const target = view === 'history' ? $('history') : $('summary');
   const data = currentData();
-  if (!data) { target.textContent = ''; return; }
+  const isNow = browseMonth === monthOf(Date.now());
+  if (!data) {
+    target.textContent = '';
+    if (view === 'summary' && isNow) renderNotices(target, currentNotices());
+    return;
+  }
   if (view === 'history') {
     renderHistory(target, data, { onEdit: edit });
   } else {
     renderSummary(target, data, {
       selected: selectedCategory,
+      notices: isNow ? currentNotices() : [],
       monthName: monthLabel(browseMonth),
       onSelect: (name) => { selectedCategory = name; renderBrowse(); target.scrollTop = 0; },
       onBack: () => { selectedCategory = null; renderBrowse(); },
@@ -313,6 +336,7 @@ async function loadMonth(month) {
     const data = await call(cfg, 'month', { month });
     monthData.set(month, data);
     if (month === monthOf(Date.now())) store.setCachedMonth(data);
+    if (data.health) store.setCached({ ...(store.cached() || {}), health: data.health });
     data.entries.forEach((e) => recentSent.delete(e.id));
   } catch (err) {
     if (seq === loadSeq) loadError = err && err.code ? err.code : 'network';

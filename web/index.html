@@ -80,6 +80,16 @@
   .tabs { display: grid; grid-template-columns: repeat(3, 1fr); margin-top: 8px; border-top: 1px solid var(--line); }
   .tab { border: 0; background: none; padding: 6px 0 2px; display: flex; flex-direction: column; align-items: center; gap: 1px; font-size: 11px; color: var(--muted); }
   .tab[aria-current="page"] { color: var(--accent); }
+  .tab { position: relative; }
+  .tab.alert::after { content: ""; position: absolute; top: 4px; left: calc(50% + 9px); width: 8px; height: 8px; border-radius: 50%; background: var(--warn); }
+  .tab.alert-ng::after { background: var(--ng); }
+
+  .notices { display: flex; flex-direction: column; gap: 8px; margin: 2px 0 10px; }
+  .notice { border-radius: 12px; padding: 10px 12px; font-size: 14px; }
+  .notice.warn { color: var(--warn); background: var(--warn-bg); }
+  .notice.ng { color: var(--ng); background: var(--ng-bg); }
+  .notice-text { font-weight: 600; }
+  .notice-hint { font-size: 12px; margin-top: 2px; opacity: .85; }
 
   /* 履歴・まとめ */
   .monthbar { display: flex; justify-content: space-between; align-items: center; padding: 0 2px 6px; }

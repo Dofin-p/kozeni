@@ -192,3 +192,62 @@ test('setupPhase3 は既にある開始月を変えず、古い表の残りを�
   assert.equal(s[4][0], '2026-01');
   assert.equal(s[30]?.[0] ?? '', '', '24か月より下の古い行は空になる');
 });
+
+// ---------- 記録が止まっていないかの手がかり ----------
+
+const plain = (x) => JSON.parse(JSON.stringify(x));
+
+function healthOf(gas, nowText, start = '2026-11') {
+  gas.sheets.summary = [['初期繰越', 100000], ['開始月', start]];
+  return plain(gas.ctx.health_(gas.ctx.readExpenses_(), jst(nowText)));
+}
+
+test('health は今月の固定費が入っていなければ名前を返す（1日の2時までは待つ）', () => {
+  const gas = loadGas();
+  gas.sheets.expenses[0].push('memo');
+  assert.deepEqual(healthOf(gas, '2026-11-01T01:30:00').fixedMissing, [], 'トリガーの時間帯は知らせない');
+  const h = healthOf(gas, '2026-11-01T02:00:00');
+  assert.equal(h.month, '2026-11');
+  assert.deepEqual(h.fixedMissing, ['クロード', 'paiday', 'music', 'goodnotes', 'amazonprime', 'GPT', 'Gemini']);
+  assert.deepEqual(healthOf(gas, '2026-11-16T12:00:00', '2026-12').fixedMissing, [], '開始月より前は知らせない');
+});
+
+test('health は計上済みの固定費を数えず、一部だけ消えたらその名前だけ返す', () => {
+  const gas = loadGas();
+  gas.sheets.summary = [['初期繰越', 100000], ['開始月', tokyoMonth()]];
+  gas.sheets.expenses[0].push('memo');
+  gas.ctx.addFixedCosts();
+  const now = new Date();
+  const fresh = plain(gas.ctx.health_(gas.ctx.readExpenses_(), now));
+  // 1日の0〜2時に走ると fixedMissing は空になる。どちらにせよ空であるべき。
+  assert.deepEqual(fresh.fixedMissing, []);
+
+  const i = gas.sheets.expenses.findIndex((r) => r[4] === 'GPT');
+  gas.sheets.expenses.splice(i, 1);
+  const day = Number(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo', day: 'numeric' }).format(now));
+  const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Tokyo', hour: 'numeric', hourCycle: 'h23' }).format(now));
+  if (day > 1 || hour >= 2) assert.deepEqual(plain(gas.ctx.health_(gas.ctx.readExpenses_(), now)).fixedMissing, ['GPT']);
+});
+
+test('health の lastRecordedAt は固定費を除いたいちばん新しい記録', () => {
+  const gas = loadGas();
+  gas.sheets.expenses = [
+    ['id', 'date', 'amount', 'category', 'memo'],
+    ['a', jst('2026-11-03T12:00:00'), 500, '食費', ''],
+    ['b', jst('2026-11-09T08:30:00'), 300, '本', ''],
+    ['fixed:2026-11:GPT', jst('2026-11-01T00:00:00'), 3000, '固定費', 'GPT'],
+    ['c', jst('2026-10-30T12:00:00'), 900, '食費', ''],
+  ];
+  assert.equal(healthOf(gas, '2026-11-16T12:00:00').lastRecordedAt, jst('2026-11-09T08:30:00').toISOString());
+  gas.sheets.expenses = [gas.sheets.expenses[0], gas.sheets.expenses[3]];
+  assert.equal(healthOf(gas, '2026-11-16T12:00:00').lastRecordedAt, null, '固定費だけなら記録なし');
+});
+
+test('state と month は health を返す', () => {
+  const gas = loadGas();
+  gas.sheets.summary = [['初期繰越', 100000], ['開始月', tokyoMonth()]];
+  const state = gas.call('state').data;
+  assert.equal(state.health.month, tokyoMonth());
+  assert.ok(Array.isArray(state.health.fixedMissing));
+  assert.deepEqual(gas.call('month', { month: shift(tokyoMonth(), -1) }).data.health, state.health, '過去の月を開いても「今」の手がかり');
+});

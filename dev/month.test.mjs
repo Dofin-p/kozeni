@@ -87,3 +87,39 @@ test('datetime-local との行き来', () => {
   assert.equal(M.fromLocalInput('2026-11-06T09:05'), iso);
   assert.equal(M.fromLocalInput(''), null);
 });
+
+// ---------- 記録が止まっていないかの注意 ----------
+
+const NOW = Date.parse('2026-11-16T12:00:00+09:00');
+const H = 3600000;
+const health = (o = {}) => ({ month: '2026-11', fixedMissing: [], lastRecordedAt: new Date(NOW - 2 * H).toISOString(), ...o });
+const queued = (hoursAgo) => ({ id: `q${hoursAgo}`, date: new Date(NOW - hoursAgo * H).toISOString(), amount: 100, category: '食費' });
+
+test('notices は何もなければ空', () => {
+  assert.deepEqual(M.notices(health(), [], NOW), []);
+  assert.deepEqual(M.notices(null, [], NOW), [], '一度もつながっていなければ何も言わない');
+  assert.deepEqual(M.notices(health(), [queued(23)], NOW), [], '1日未満の未送信は知らせない');
+});
+
+test('notices は固定費の抜けを最初に、強い色で出す', () => {
+  const list = M.notices(health({ fixedMissing: ['GPT', 'Gemini'] }), [], NOW);
+  assert.equal(list.length, 1);
+  assert.equal(list[0].tone, 'ng');
+  assert.match(list[0].text, /GPT・Gemini/);
+  assert.deepEqual(M.notices(health({ month: '2026-10', fixedMissing: ['GPT'] }), [], NOW), [], '前の月の手がかりは使わない');
+});
+
+test('notices は1日以上送れていない記録を知らせる', () => {
+  const list = M.notices(health(), [queued(50), queued(1)], NOW);
+  assert.equal(list.length, 1);
+  assert.equal(list[0].tone, 'warn');
+  assert.match(list[0].text, /2日前の記録を含む 2件/);
+});
+
+test('notices は最後の記録から3日たったら知らせる。未送信の記録も「記録」に数える', () => {
+  const old = health({ lastRecordedAt: new Date(NOW - 80 * H).toISOString() });
+  assert.match(M.notices(old, [], NOW)[0].text, /最後の記録から 3日/);
+  assert.deepEqual(M.notices(old, [queued(1)], NOW), [], '端末に新しい記録があれば止まっていない');
+  assert.deepEqual(M.notices(health({ lastRecordedAt: new Date(NOW - 71 * H).toISOString() }), [], NOW), []);
+  assert.deepEqual(M.notices(health({ lastRecordedAt: null }), [], NOW), [], '記録が1件も無いうちは言わない');
+});

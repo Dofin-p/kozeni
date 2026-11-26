@@ -1,7 +1,7 @@
 import * as calc from './calc.js';
 import { createStore, HOLD_MS, monthOf } from './store.js';
 import { call, isRetryable } from './api.js';
-import { colorOf, withPending, addMonths, monthLabel, notices } from './month.js';
+import { colorOf, withPending, addMonths, monthLabel, notices, dailyBudget } from './month.js';
 import { renderHistory, openEditor } from './history.js';
 import { renderSummary, renderNotices } from './summary.js';
 import { openIncomeEditor } from './income.js';
@@ -39,6 +39,9 @@ function render() {
   const month = monthOf(Date.now());
   $('monthLabel').textContent = `${Number(month.slice(5))}月の支出`;
   $('spent').textContent = calc.yen(store.spentThisMonth());
+  // 1日の予算は収入と固定費だけで決まるので、最後に取れた今月の月データから出す
+  const budget = dailyBudget(monthData.get(month));
+  $('dailyBudget').textContent = budget ? `1日の予算 ${calc.yen(budget.perDay)}` : '';
   renderDisplay();
   renderSync();
   renderCategories();
@@ -345,6 +348,7 @@ async function loadMonth(month) {
   } finally {
     if (seq === loadSeq) loading = false;
     if (view !== 'input') renderBrowse();
+    else render();
   }
 }
 
@@ -461,7 +465,8 @@ const wake = () => {
   retryDelay = 0;
   flush();
   refreshState().catch(() => {});
-  if (view !== 'input') loadMonth(browseMonth);
+  // 入力画面でも今月の月データを取り直す（1日の予算に収入と固定費が要る）
+  loadMonth(view !== 'input' ? browseMonth : monthOf(Date.now()));
 };
 window.addEventListener('online', wake);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') wake(); });

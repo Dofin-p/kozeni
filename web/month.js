@@ -147,3 +147,30 @@ export function notices(health, queue, now) {
   }
   return out;
 }
+
+// ---------- 1日の予算 ----------
+
+// 収入の2割は貯蓄に回す。残りの8割から固定費を引いた額を、その月の日数で割ったものが1日の予算。
+export const SAVING_PERCENT = 20;
+
+export function daysInMonth(month) {
+  return new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0).getDate();
+}
+
+// data は月データ（month・income・fixed）。収入がまだ無い月は null。
+export function dailyBudget(data) {
+  if (!data || !data.month || !data.income) return null;
+  const spendable = Math.floor((data.income * (100 - SAVING_PERCENT)) / 100);
+  const fixed = data.fixed || 0;
+  const usable = spendable - fixed;
+  const days = daysInMonth(data.month);
+  return {
+    income: data.income,
+    saving: data.income - spendable,
+    spendable,
+    fixed,
+    usable,
+    days,
+    perDay: usable > 0 ? Math.floor(usable / days) : 0,
+  };
+}

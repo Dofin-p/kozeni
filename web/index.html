@@ -123,6 +123,10 @@
   .legend-row, .fixed-head { width: 100%; display: flex; align-items: center; gap: 10px; padding: 9px 8px; border: 0; border-radius: 10px; background: none; font-size: 15px; }
   .legend-row:active, .fixed-head:active { background: var(--key-active); }
   .legend-row .pct { width: 52px; text-align: right; font-size: 12px; color: var(--sub); }
+  .budget { margin: 10px 0 0; padding: 10px 12px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); }
+  .budget-head { display: flex; align-items: baseline; font-size: 14px; }
+  .budget-amount { font-size: 22px; font-weight: 600; }
+  .ng-text { color: var(--ng); }
   .fixed { border-top: 1px solid var(--line); margin-top: 6px; padding-top: 4px; }
   .fixed-head { color: var(--sub); font-size: 14px; }
   .fixed-row { display: flex; padding: 6px 8px 6px 18px; font-size: 13px; color: var(--sub); }
@@ -179,6 +183,7 @@
       <div>
         <div class="label" id="monthLabel">今月の支出</div>
         <div class="spent" id="spent">¥0</div>
+        <div class="small" id="dailyBudget"></div>
       </div>
       <div class="top-right">
         <span class="sync" id="sync" role="status"></span>

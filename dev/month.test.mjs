@@ -123,3 +123,29 @@ test('notices は最後の記録から3日たったら知らせる。未送信�
   assert.deepEqual(M.notices(health({ lastRecordedAt: new Date(NOW - 71 * H).toISOString() }), [], NOW), []);
   assert.deepEqual(M.notices(health({ lastRecordedAt: null }), [], NOW), [], '記録が1件も無いうちは言わない');
 });
+
+// ---------- 1日の予算 ----------
+
+test('1日の予算は（収入の8割 − 固定費）÷ 月の日数。2割は貯蓄に残る', () => {
+  const b = M.dailyBudget({ month: '2026-11', income: 98131, fixed: 15105 });
+  assert.equal(b.spendable, 78504);
+  assert.equal(b.saving, 19627);
+  assert.equal(b.usable, 63399);
+  assert.equal(b.days, 30);
+  assert.equal(b.perDay, 2113);
+});
+
+test('1日の予算は月の日数で割る（31日・うるう年の2月）', () => {
+  assert.equal(M.daysInMonth('2026-12'), 31);
+  assert.equal(M.daysInMonth('2026-02'), 28);
+  assert.equal(M.daysInMonth('2028-02'), 29);
+  assert.equal(M.dailyBudget({ month: '2026-12', income: 100000, fixed: 0 }).perDay, 2580);
+});
+
+test('収入がまだ無い月は null、固定費が8割を超えたら0円', () => {
+  assert.equal(M.dailyBudget({ month: '2026-11', income: 0, fixed: 15105 }), null);
+  assert.equal(M.dailyBudget(null), null);
+  const over = M.dailyBudget({ month: '2026-11', income: 10000, fixed: 15105 });
+  assert.equal(over.usable, 8000 - 15105);
+  assert.equal(over.perDay, 0);
+});

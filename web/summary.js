@@ -1,6 +1,6 @@
 // まとめ画面：残り・カテゴリ別の円グラフ・固定費、カテゴリを押したときの詳細。
 import { yen } from './calc.js';
-import { shares, percent, previousVariable, colorOf, FIXED_CATEGORY, GRAY, groupByDay } from './month.js';
+import { shares, percent, previousVariable, colorOf, FIXED_CATEGORY, GRAY, groupByDay, dailyBudget, SAVING_PERCENT } from './month.js';
 
 const SVG = 'http://www.w3.org/2000/svg';
 const R = 78;
@@ -48,6 +48,7 @@ function renderOverview(root, data, { onSelect, notices, onIncome }) {
     hero.append(el('div', 'sub', `収入 ${data.income.toLocaleString('ja-JP')} + 繰越 ${data.carryover.toLocaleString('ja-JP')} − 支出 ${data.spent.toLocaleString('ja-JP')}`));
   }
   root.append(hero);
+  root.append(budgetBox(data));
 
   const parts = shares(data);
   const prev = previousVariable(data);
@@ -102,6 +103,24 @@ function renderOverview(root, data, { onSelect, notices, onIncome }) {
     inc.append(add);
   }
   root.append(inc);
+}
+
+// 1日の予算：収入の8割から固定費を引き、月の日数で割る。式もそのまま見せる。
+function budgetBox(data) {
+  const box = el('section', 'budget');
+  const b = dailyBudget(data);
+  const n = (v) => v.toLocaleString('ja-JP');
+  if (!b) {
+    box.append(el('div', 'small', '収入を入れると1日の予算が出ます'));
+    return box;
+  }
+  const head = el('div', 'budget-head');
+  head.append(el('span', 'grow', '1日の予算'), el('span', 'budget-amount', yen(b.perDay)));
+  box.append(head);
+  box.append(el('div', 'small', `収入の${(100 - SAVING_PERCENT) / 10}割 ${n(b.spendable)} − 固定費 ${n(b.fixed)} = ${n(b.usable)} ÷ ${b.days}日`));
+  box.append(el('div', 'small', `貯蓄に回す分 ${n(b.saving)}（収入の${SAVING_PERCENT / 10}割）`));
+  if (b.usable <= 0) box.append(el('div', 'small ng-text', `固定費が収入の${(100 - SAVING_PERCENT) / 10}割を超えています`));
+  return box;
 }
 
 // ドーナツは線の破線（stroke-dasharray）で切れ目を作る。12時から時計回り。

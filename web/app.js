@@ -461,6 +461,8 @@ document.addEventListener('keydown', (e) => {
 
 // 開き直したとき・電波が戻ったときに、たまっている分を送る。GAS を直した後もここで1回試し直す。
 const wake = () => {
+  if (reloadPending) { location.reload(); return; }
+  checkForUpdate();
   error = null;
   retryDelay = 0;
   flush();
@@ -471,7 +473,29 @@ const wake = () => {
 window.addEventListener('online', wake);
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') wake(); });
 
+// ---------- 画面の更新 ----------
+
+// 新しい版の Service Worker に入れ替わったら、一度だけ読み込み直して新しい画面にする。
+// 初めて入れたとき（もともと制御されていない）は読み込み直さない。
+// 打ちかけの金額・取り消しの5秒・開いているシートがあるときは、次に開いたときまで待つ（未送信の記録は端末に残っているので消えない）。
+let reloadPending = false;
+const busyForReload = () => calc.total(input) > 0 || !$('toast').hidden
+  || !$('editSheet').hidden || !$('incomeSheet').hidden || !$('settings').hidden;
+
+function checkForUpdate() {
+  if (!('serviceWorker' in navigator)) return;
+  navigator.serviceWorker.getRegistration().then((reg) => reg && reg.update()).catch(() => {});
+}
+
 if ('serviceWorker' in navigator) {
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || reloading) return;
+    if (busyForReload()) { reloadPending = true; return; }
+    reloading = true;
+    location.reload();
+  });
   navigator.serviceWorker.register('./sw.js').catch(() => {});
 }
 
